@@ -10,7 +10,7 @@
 
 - **頭上カメラ**: 入場者の様子を上から撮影（個人所有のWebカメラを使用）
 - **顔認識カメラ**: 入口で来場者の顔を認識・識別（Logicool WebCam C920n）
-- **出口表示装置**: 出口付近に設置され、来場者が自分の入場時の映像を見ることができる装置
+- **出口表示装置**: 出口付近に設置され、来場者が自分の入場時の映像を見ることができる装置 (Logicool WebCam C922)
 - **サーバー**: すべてのデバイスを接続し、データ処理を行うLAN内のサーバー
 - **接続機器**: 10m USB延長ケーブル（カメラ接続用）
 
@@ -143,6 +143,160 @@
 - 定期的なシステム状態の確認
 - トラブル発生時の対応手順の準備
 - バックアップ機器の準備
+
+## 10. システムアーキテクチャ詳細
+
+### 10.1 物理構成
+
+システムは以下の2つの主要エリアで構成されます：
+
+#### 入口エリア
+- 頭上カメラ（USBカメラ）
+- Raspberry Pi（映像キャプチャ・エンコードサーバー）
+- 顔認識カメラ（入口）
+
+#### サーバーエリア
+- メインサーバー（Docker環境）
+- 顔認識カメラ（出口）
+- TouchDesigner実行環境
+- 表示装置
+
+### 10.2 コンポーネント詳細
+
+#### Raspberry Pi 映像キャプチャサーバー
+- **役割**: 頭上カメラからの映像取得とストリーミング
+- **実装**:
+  - H.264エンコーディング
+  - RTSPストリーミングサーバー
+  - 最小限の処理に限定し安定性を確保
+- **出力**: RTSPストリーム（rtsp://localhost:8554/stream）
+
+#### メインサーバー（Docker環境）
+- **コンポーネント**:
+  - 映像処理サーバー（FFmpeg）
+  - 顔認識システム（MediaPipe）
+  - Redisデータベース
+  - WebSocketサーバー
+- **機能**:
+  - RTSPストリームの受信と処理
+  - 顔認識データの処理と保存
+  - NDIによるTouchDesigner連携
+
+#### データストア（Redis）
+- **保存データ**:
+  - 顔特徴量
+  - 入室タイムスタンプ
+  - 一時的な参照データ
+- **特徴**:
+  - インメモリデータベース
+  - 高速な類似度検索
+  - イベント終了後のデータ自動削除
+
+### 10.3 データフロー
+
+1. **映像キャプチャフロー**
+   - 頭上カメラ → Raspberry Pi → RTSPストリーム → メインサーバー
+   - エンコード形式: H.264
+   - フレームレート: 30fps
+   - 解像度: 1920x1080
+
+2. **顔認識フロー**
+   - 入口カメラ → WebSocket → メインサーバー
+   - 特徴量抽出 → Redis保存
+   - 出口カメラでの照合 → 映像検索
+
+3. **表示フロー**
+   - メインサーバー → NDI → TouchDesigner
+   - 20秒間の映像クリップ生成
+   - エフェクト適用と表示
+
+### 10.4 ネットワーク要件
+
+- **有線LAN接続必須**
+  - Raspberry Pi ⇔ メインサーバー間
+  - 顔認識カメラ ⇔ メインサーバー間
+- **推奨帯域**: 最低10Mbps以上
+- **遅延要件**: RTT 50ms以下
+
+### 10.5 エラー対策
+
+- **自動再接続機能**
+  - ネットワーク切断時の再接続
+  - ストリーミングの自動復旧
+- **監視システム**
+  - コンポーネント状態の定期確認
+  - エラーログの集中管理
+- **フォールバック処理**
+  - 顔認識失敗時の代替フロー
+  - 一時的なデータ保存と復旧
+
+### 10.6 システム構成図
+
+```mermaid
+graph TD
+    subgraph "入口エリア"
+        A[頭上カメラ] -->|USB| B[Raspberry Pi<br/>映像キャプチャ/エンコード]
+        C[顔認識カメラ<br/>入口] -->|WebSocket| D
+        B -->|RTSP/WebRTC| D
+    end
+
+    subgraph "サーバーエリア"
+        D[メインサーバー<br/>Docker + FFmpeg]
+        E[顔認識カメラ<br/>出口] -->|WebSocket| D
+        D -->|Redis| F[Redis Server<br/>特徴量 + タイムスタンプ]
+        D -->|NDI| G[TouchDesigner]
+        G -->|表示| H[出口ディスプレイ]
+    end
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#f9f,stroke:#333,stroke-width:2px
+    style E fill:#f9f,stroke:#333,stroke-width:2px
+    style H fill:#bbf,stroke:#333,stroke-width:2px
+```
+
+### 10.7 シーケンス図
+
+```mermaid
+sequenceDiagram
+    participant EC as 入口カメラ
+    participant TC as 頭上カメラ
+    participant RP as Raspberry Pi
+    participant MS as メインサーバー
+    participant RD as Redis
+    participant TD as TouchDesigner
+    participant XC as 出口カメラ
+    participant DS as ディスプレイ
+
+    %% 入室時のフロー
+    Note over EC,DS: 入室時
+    EC->>MS: 顔認識データ送信
+    TC->>RP: 映像キャプチャ
+    RP->>MS: RTSPストリーム送信
+    MS->>RD: 顔特徴量・タイムスタンプ保存
+
+    %% 出口時のフロー
+    Note over EC,DS: 退室時
+    XC->>MS: 顔認識データ送信
+    MS->>RD: 顔特徴量照合
+    RD->>MS: マッチング結果
+    MS->>MS: 該当映像クリップ生成
+    MS->>TD: NDIで映像送信
+    TD->>DS: エフェクト適用・表示
+```
+
+### 10.8 コンポーネント間の通信プロトコル詳細
+
+1. **カメラ → サーバー通信**
+   - 頭上カメラ: RTSP over TCP (port 8554)
+   - 顔認識カメラ: WebSocket (port 8080)
+
+2. **サーバー内部通信**
+   - Redis: TCP (port 6379)
+   - Docker間通信: 内部ネットワーク
+
+3. **表示系通信**
+   - NDI: UDP (port 5960-5968)
+   - モニタリング: HTTP (port 8081)
 
 ---
 
