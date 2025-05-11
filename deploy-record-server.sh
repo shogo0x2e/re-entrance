@@ -15,11 +15,23 @@ else
   echo "record-serverサービスは既にインストールされていないためスキップします"
 fi'
 
+# record-server-recorderサービスの停止・無効化
+ssh -i ~/.ssh/id_rsa_mq3rpi mq3@$RASPBERRY_PI_IP '
+if systemctl is-active record-server-recorder &>/dev/null; then
+  sudo systemctl stop record-server-recorder && sudo systemctl disable record-server-recorder
+  sudo rm -f /etc/systemd/system/record-server-recorder.service
+  echo "既存のrecord-server-recorderサービスを停止・無効化しました。"
+  sudo rm -rf ~/re-entrance-videos/
+else
+  echo "record-server-recorderサービスは既にインストールされていないためスキップします"
+fi'
 
-# 公開鍵を使用してSSH接続
-ssh -i ~/.ssh/id_rsa_mq3rpi mq3@$RASPBERRY_PI_IP 'rm -rf ~/re-entrance'
 
-ssh -i ~/.ssh/id_rsa_mq3rpi mq3@$RASPBERRY_PI_IP 'mkdir -p ~/re-entrance/apps/record-server'
+
+# リモートのディレクトリを削除 (クリーンインストール用なので一旦コメントアウト)
+# ssh -i ~/.ssh/id_rsa_mq3rpi mq3@$RASPBERRY_PI_IP 'rm -rf ~/re-entrance'
+
+# ssh -i ~/.ssh/id_rsa_mq3rpi mq3@$RASPBERRY_PI_IP 'mkdir -p ~/re-entrance/apps/record-server'
 
 # ローカルのディレクトリをリモートにコピー
 scp -i ~/.ssh/id_rsa_mq3rpi -r \
@@ -29,6 +41,7 @@ scp -i ~/.ssh/id_rsa_mq3rpi -r \
   pyproject.toml \
   README.md \
   .python-version \
+  record.py \
   mq3@$RASPBERRY_PI_IP:~/re-entrance/apps/record-server/
 
 # リモートでセットアップスクリプトを実行

@@ -37,11 +37,37 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
+# USER が video グループにいること
+# sudo usermod -a -G video $USER
+
+sudo tee /etc/systemd/system/record-server-recorder.service << EOF
+[Unit]
+Description=Record Server Video Recorder
+After=network.target
+
+[Service]
+Type=simple
+User=mq3
+Group=video
+WorkingDirectory=$(pwd)
+Environment="PATH=$(pwd)/.venv/bin"
+ExecStart=$(pwd)/.venv/bin/python record.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # サービスの有効化と起動
 echo "サービスを起動しています..."
 sudo systemctl daemon-reload
+
 sudo systemctl enable record-server
 sudo systemctl start record-server
 
+sudo systemctl enable record-server-recorder
+sudo systemctl start record-server-recorder
+
 echo "=== セットアップが完了しました ==="
 echo "サービスの状態を確認するには: sudo systemctl status record-server"
+echo "サービスの状態を確認するには: sudo systemctl status record-server-recorder"
