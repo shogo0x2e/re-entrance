@@ -6,10 +6,88 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// 顔認識カメラから取得した特徴量とタイムスタンプ
+// この特徴量を使って、対応する動画シーンを生成する
+model Feature {
+  id          String   @id @default(uuid())
+  timestamp   DateTime // 撮影時刻
+  vectorId    String   // QdrantのベクトルID
+  createdAt   DateTime @default(now())
+  scene       Scene?   // この特徴量から生成されたシーン
+
+  @@index([timestamp])
+}
+
+// 頭上カメラで撮影された5分間の動画ファイル
+// 5分ごとに区切られており、時間は連続している
+model Clip {
+  id          String   @id @default(uuid())
+  filename    String   // オリジナルのファイル名
+  path        String   // MinIO上のパス
+  recordedAt  DateTime // 録画開始時刻
+  duration    Int      // 動画の長さ（秒）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  scenes      Scene[]  // この動画から切り出されたシーン
+  segments    ClipSegment[] // シーンを構成する動画セグメント
+
+  @@index([recordedAt])
+}
+
+// 特徴量検索結果から生成される動画シーン生成ジョブ
+// 動画の区切りをまたぐ場合、複数のClipSegmentで構成される
+model SceneJob {
+  id          String   @id @default(uuid())
+  status      JobStatus @default(PENDING)
+  error       String?  // エラーメッセージ
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  scene       Scene?   // 生成されたシーン
+  segments    ClipSegment[] // シーンを構成する動画セグメント
+}
+
+// シーン生成ジョブで使用する動画の一部分
+// 動画の区切りをまたぐ場合、複数のセグメントが順序付きで存在する
+model ClipSegment {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         SceneJob @relation(fields: [jobId], references: [id])
+  clipId      String
+  clip        Clip     @relation(fields: [clipId], references: [id])
+  startSeconds Int     // この動画内での開始時間（秒）
+  endSeconds   Int     // この動画内での終了時間（秒）
+  order       Int      // セグメントの順序（0から始まる）
+
+  @@index([jobId, order])
+  @@index([clipId])
+}
+
+// 特徴量検索結果から生成された動画シーン
+// 元の動画から切り出され、MinIOに保存される
+model Scene {
+  id          String   @id @default(uuid())
+  clipId      String
+  clip        Clip     @relation(fields: [clipId], references: [id])
+  jobId       String   @unique
+  job         SceneJob @relation(fields: [jobId], references: [id])
+  featureId   String   @unique  // このシーンを生成した特徴量
+  feature     Feature  @relation(fields: [featureId], references: [id])
+  filename    String   // シーンのファイル名
+  path        String   // MinIO上のパス
+  createdAt   DateTime @default(now())
+}
+
+// シーン生成ジョブの状態
+enum JobStatus {
+  PENDING     // ジョブが作成され、待機中
+  PROCESSING  // シーン生成処理中
+  COMPLETED   // シーン生成完了
+  FAILED      // シーン生成失敗
 }
