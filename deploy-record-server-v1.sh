@@ -1,7 +1,7 @@
 RASPBERRY_PI_IP="raspberrypi.lan"
 
 # requirements.txt を export
-cd apps/record-server
+cd apps/record-server-v1
 uv pip freeze > requirements.txt
 
 
@@ -42,7 +42,17 @@ scp -i ~/.ssh/id_rsa_mq3rpi -r \
   README.md \
   .python-version \
   record.py \
+  cleanup.py \
   mq3@$RASPBERRY_PI_IP:~/re-entrance/apps/record-server/
 
 # リモートでセットアップスクリプトを実行
 ssh -i ~/.ssh/id_rsa_mq3rpi mq3@$RASPBERRY_PI_IP 'cd ~/re-entrance/apps/record-server && chmod +x setup.sh && ./setup.sh'
+
+# cron に登録
+# ssh -i ~/.ssh/id_rsa_mq3rpi mq3@$RASPBERRY_PI_IP '
+# chmod +x ~/re-entrance/apps/record-server/cleanup.py
+# mkdir -p ~/re-entrance-videos-logs
+# touch ~/re-entrance-videos-logs/cleanup.log
+# chmod 644 ~/re-entrance-videos-logs/cleanup.log
+# (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 ~/re-entrance/apps/record-server/cleanup.py >> ~/re-entrance-videos-logs/cleanup.log 2>&1") | crontab -
+# '
