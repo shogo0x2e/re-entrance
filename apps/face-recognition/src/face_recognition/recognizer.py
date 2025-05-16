@@ -4,7 +4,7 @@ import mediapipe as mp
 import numpy as np
 
 class FaceRecognizer:
-    def __init__(self, cap=None):
+    def __init__(self, cap=None, video_recorder=None):
         # 特徴量を取得する間隔（秒）
         self.interval = 0.5
         self.last_time = 0
@@ -33,6 +33,7 @@ class FaceRecognizer:
         )
         
         self.cap = cap
+        self.video_recorder = video_recorder
 
     def initialize_camera(self):
         """カメラの初期化を行う"""
@@ -90,12 +91,17 @@ class FaceRecognizer:
 
     def run(self):
         """メインループ"""
-        cap = self.initialize_camera()
         try:
             while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
+                # VideoRecorderからフレームを取得
+                if self.video_recorder:
+                    frame = self.video_recorder.get_current_frame()
+                    if frame is None:
+                        continue
+                else:
+                    ret, frame = self.cap.read()
+                    if not ret:
+                        break
 
                 current_time = time.time()
 
@@ -116,6 +122,7 @@ class FaceRecognizer:
                     break
 
         finally:
-            cap.release()
+            if not self.video_recorder and self.cap:
+                self.cap.release()
             cv2.destroyAllWindows()
             self.face_mesh.close() 
