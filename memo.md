@@ -16,3 +16,10 @@ curl -X POST http://localhost:3000/clips \
   -F "metadata={\"recordedAt\":\"2024-03-20T10:00:00Z\",\"duration\":9}" \
   -H "Accept: application/json"
 ```
+
+POST /features/search
+```bash
+curl -X POST http://localhost:3000/features/search \
+  -H "Content-Type: application/json" \
+  -d '{"vector": [0.1, 0.2, 0.3]}'
+```

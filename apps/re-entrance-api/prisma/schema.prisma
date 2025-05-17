@@ -18,7 +18,7 @@ datasource db {
 model Feature {
   id          String   @id @default(uuid())
   timestamp   DateTime // 撮影時刻
-  vectorId    String   // QdrantのベクトルID
+  vectorId    String   @unique  // QdrantのベクトルID
   createdAt   DateTime @default(now())
   scene       Scene?   // この特徴量から生成されたシーン
 
